@@ -37,7 +37,8 @@ get.signature.genes <- function(ref.dat,
 								psudeo.min= 1E-8, 
 								pval.cut =0.01,
 								topN=100,
-								n.cores){
+								n.cores,
+			       					seurat = T){
 	
 	#Check for missing arguments
 	if(missing(cell.type.labels)) stop("Please provide a vector for cell.type.labels")
@@ -45,49 +46,72 @@ get.signature.genes <- function(ref.dat,
 	if(missing(return.cell.type.name)) stop("Please specify T/F for return.cell.type.name")
 	if(missing(n.cores)) stop("Please specify number of cores for parallel processing (n.cores)")
 	if(length(cell.type.labels)!=nrow(ref.dat)) stop("Error: length(cell.type.labels) is not equal to nrow(ref.dat)")
+	if(seurat = T & use.hclust = T)) stop("use.hclust and seurat cannot both be true")
 	
 	#normalize ref.dat to prepare input for findMarker
-	scran.sf <- computeSumFactors(x=t(ref.dat), clusters= cell.type.labels, BPPARAM = MulticoreParam(n.cores))
-	dat.tmp <- ref.dat/scran.sf
-	dat.tmp <- log2(dat.tmp+0.1) - log2(0.1)
+	
+	if(seurat){
+		res <- findMarkers(x=ref.dat, 
+						   groups= cell.type.labels, 
+						   test.type= "t", 
+						   pval.type= "all", 
+						   direction="up",
+						   sorted=F, 
+						   BPPARAM = MulticoreParam(n.cores))
 
-	if(use.hclust){
-		ref.collapsed <- collapse.exp.df(exp.df= ref.dat, sample.type.vec= cell.type.labels)
-		ref.matched.norm <- norm.to.one(exp.df= ref.collapsed, psudeo.min= psudeo.min)
-		ref.matched.norm.log <- log2(ref.matched.norm)
+			sig.gene.id.list <- lapply(res,function(res.i) {
+				res.i$lfc.min <- apply(res.i[,grepl("logFC",colnames(res.i)),drop=F],1,min)
+				res.i <- res.i[res.i$p.value < pval.cut & res.i$lfc.min>0,]
+				if(!is.null(topN)) res.i <- res.i[order(res.i$lfc.min,decreasing=T)[1:min(topN,nrow(res.i))],]			
+				rownames(res.i)
+			} )
+			names(sig.gene.id.list) <- names(res)
 
-		ref.matched.norm.log.centered <- scale(ref.matched.norm.log,center=T,scale=F)
-		cor.mat <- cor(t(ref.matched.norm.log.centered))
-
-		hc <- hclust(as.dist(1-cor.mat),method="ward.D2")
-		
-		sig.gene.ids <- unique(unlist(mclapply(2:ncol(cor.mat),FUN= get.signature.genes.cls.num, 
-												hc= hc, dat.tmp= dat.tmp, 
-												pval.cut = pval.cut, topN= topN,
-												cell.type.labels= cell.type.labels, 
-												mc.cores=n.cores)))
+			if(return.cell.type.name) return(sig.gene.id.list)
+			else sig.gene.ids <- unique(unlist(sig.gene.id.list))
 	}
 	else{
-		res <- findMarkers(x= t(dat.tmp), 
-					   groups= cell.type.labels, 
-					   test.type= "t", 
-					   pval.type= "all", 
-					   direction="up",
-					   sorted=F, 
-					   BPPARAM = MulticoreParam(n.cores))
-		
-		sig.gene.id.list <- lapply(res,function(res.i) {
-			res.i$lfc.min <- apply(res.i[,grepl("logFC",colnames(res.i)),drop=F],1,min)
-			res.i <- res.i[res.i$p.value < pval.cut & res.i$lfc.min>0,]
-			if(!is.null(topN)) res.i <- res.i[order(res.i$lfc.min,decreasing=T)[1:min(topN,nrow(res.i))],]			
-			rownames(res.i)
-		} )
-		names(sig.gene.id.list) <- names(res)
-		
-		if(return.cell.type.name) return(sig.gene.id.list)
-		else sig.gene.ids <- unique(unlist(sig.gene.id.list))
+		scran.sf <- computeSumFactors(x=t(ref.dat), clusters= cell.type.labels, BPPARAM = MulticoreParam(n.cores))
+		dat.tmp <- ref.dat/scran.sf
+		dat.tmp <- log2(dat.tmp+0.1) - log2(0.1)
+
+		if(use.hclust){
+			ref.collapsed <- collapse.exp.df(exp.df= ref.dat, sample.type.vec= cell.type.labels)
+			ref.matched.norm <- norm.to.one(exp.df= ref.collapsed, psudeo.min= psudeo.min)
+			ref.matched.norm.log <- log2(ref.matched.norm)
+
+			ref.matched.norm.log.centered <- scale(ref.matched.norm.log,center=T,scale=F)
+			cor.mat <- cor(t(ref.matched.norm.log.centered))
+
+			hc <- hclust(as.dist(1-cor.mat),method="ward.D2")
+
+			sig.gene.ids <- unique(unlist(mclapply(2:ncol(cor.mat),FUN= get.signature.genes.cls.num, 
+													hc= hc, dat.tmp= dat.tmp, 
+													pval.cut = pval.cut, topN= topN,
+													cell.type.labels= cell.type.labels, 
+													mc.cores=n.cores)))
+		}
+		else{
+			res <- findMarkers(x= t(dat.tmp), 
+						   groups= cell.type.labels, 
+						   test.type= "t", 
+						   pval.type= "all", 
+						   direction="up",
+						   sorted=F, 
+						   BPPARAM = MulticoreParam(n.cores))
+
+			sig.gene.id.list <- lapply(res,function(res.i) {
+				res.i$lfc.min <- apply(res.i[,grepl("logFC",colnames(res.i)),drop=F],1,min)
+				res.i <- res.i[res.i$p.value < pval.cut & res.i$lfc.min>0,]
+				if(!is.null(topN)) res.i <- res.i[order(res.i$lfc.min,decreasing=T)[1:min(topN,nrow(res.i))],]			
+				rownames(res.i)
+			} )
+			names(sig.gene.id.list) <- names(res)
+
+			if(return.cell.type.name) return(sig.gene.id.list)
+			else sig.gene.ids <- unique(unlist(sig.gene.id.list))
+		}
 	}
-	
 	sig.gene.ids
 }
 
