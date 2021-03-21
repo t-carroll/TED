@@ -46,7 +46,7 @@ get.signature.genes <- function(ref.dat,
 	if(missing(return.cell.type.name)) stop("Please specify T/F for return.cell.type.name")
 	if(missing(n.cores)) stop("Please specify number of cores for parallel processing (n.cores)")
 	if(length(cell.type.labels)!=nrow(ref.dat)) stop("Error: length(cell.type.labels) is not equal to nrow(ref.dat)")
-	if(seurat = T & use.hclust = T)) stop("use.hclust and seurat cannot both be true")
+	if(seurat & use.hclust)) stop("use.hclust and seurat cannot both be true")
 	
 	#normalize ref.dat to prepare input for findMarker
 	
