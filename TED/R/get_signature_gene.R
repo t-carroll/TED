@@ -39,6 +39,13 @@ get.signature.genes <- function(ref.dat,
 								topN=100,
 								n.cores){
 	
+	#Check for missing arguments
+	if(missing(cell.type.labels)) stop("Please provide a vector for cell.type.labels")
+	if(missing(use.hclust)) stop("Please specify T/F for use.hclust")
+	if(missing(return.cell.type.name)) stop("Please specify T/F for return.cell.type.name")
+	if(missing(n.cores)) stop("Please specify number of cores for parallel processing (n.cores)")
+	if(length(cell.type.labels)!=nrow(ref.dat)) stop("Error: length(cell.type.labels) is not equal to nrow(ref.dat)")
+	
 	#normalize ref.dat to prepare input for findMarker
 	scran.sf <- computeSumFactors(x=t(ref.dat), clusters= cell.type.labels, BPPARAM = MulticoreParam(n.cores))
 	dat.tmp <- ref.dat/scran.sf
